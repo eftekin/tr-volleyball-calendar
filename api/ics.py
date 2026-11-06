@@ -50,20 +50,16 @@ def ics(matches):
         key = f"{league}|{m['gevsahibi']}|{m['gmisafir']}"
         seen[key] = seen.get(key, 0) + 1  # same pairing can repeat in playoffs
         uid = hashlib.sha1(f"{key}|{seen[key]}".encode()).hexdigest()
-        title = f"🏐 {m['gevsahibi']} - {m['gmisafir']}"
-        if m["gseta"]:
-            title += f" ({m['gseta']}-{m['gsetb']})"
-        channel = m["gtvkanali"] or "kanal belli değil"
+        title = f"{m['gevsahibi']} - {m['gmisafir']}"
+        channel = m["gtvkanali"] or "belli değil"
         if m["allday"]:
-            title += " · saat belli değil"
             when = [f"DTSTART;VALUE=DATE:{m['start']:%Y%m%d}"]
         else:
             start = m["start"].astimezone(timezone.utc)
             when = [f"DTSTART:{start:%Y%m%dT%H%M%SZ}",
                     f"DTEND:{start + timedelta(hours=2):%Y%m%dT%H%M%SZ}"]
         out += ["BEGIN:VEVENT", f"UID:{uid}@voleybol-takvim", f"DTSTAMP:{stamp}", *when,
-                f"SUMMARY:{esc(title + ' · ' + channel)}",
-                f"LOCATION:{esc(m['gyer'])}",
+                f"SUMMARY:{esc(title)}",
                 f"DESCRIPTION:{esc(f'{league}\nKanal: {channel}')}",
                 "END:VEVENT"]
     out.append("END:VCALENDAR")
