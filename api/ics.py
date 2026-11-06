@@ -50,8 +50,10 @@ def ics(matches):
         key = f"{league}|{m['gevsahibi']}|{m['gmisafir']}"
         seen[key] = seen.get(key, 0) + 1  # same pairing can repeat in playoffs
         uid = hashlib.sha1(f"{key}|{seen[key]}".encode()).hexdigest()
+        channel = m["gtvkanali"]
+        if not channel.startswith("TRT"):
+            continue  # only what dedem can watch on tv; unannounced ones appear once tvf sets a trt channel
         title = f"{m['gevsahibi']} - {m['gmisafir']}"
-        channel = m["gtvkanali"] or "belli değil"
         if m["allday"]:
             when = [f"DTSTART;VALUE=DATE:{m['start']:%Y%m%d}"]
         else:
