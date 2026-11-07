@@ -33,8 +33,6 @@
   .subs a, .subs button { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px; font: inherit;
                           text-align: left; text-decoration: none; color: var(--fg); background: none; cursor: pointer; }
   .subs a:hover, .subs button:hover { border-color: var(--accent); }
-  .match { display: grid; grid-template-columns: 5.5rem 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-  .match small { display: block; color: var(--muted); }
   footer { margin-top: 32px; font-size: 14px; color: var(--muted); }
 </style>
 </head>
@@ -53,9 +51,6 @@
   <button id="copy" type="button">Linki kopyala</button>
 </div>
 
-<h2>Maçlar</h2>
-<div id="list"></div>
-
 <footer>Veri: <a href="https://fikstur.tvf.org.tr">TVF</a> · <a href="https://github.com/eftekin/tr-volleyball-calendar">GitHub</a></footer>
 
 <script>
@@ -70,14 +65,8 @@ function parse(ics) {
     const get = k => un((ev.match(new RegExp("^" + k + ":(.*)$", "m")) || [, ""])[1].trim());
     const [lig, kanal] = get("DESCRIPTION").split("\nKanal: ");
     const [ev_sahibi, misafir] = get("SUMMARY").split(" - ");
-    const d = ev.match(/^DTSTART(;VALUE=DATE)?:(\d{4})(\d\d)(\d\d)(?:T(\d\d)(\d\d))?/m);
-    return {
-      lig, kanalText: kanal, allday: !!d[1],
-      start: d[1] ? new Date(+d[2], d[3] - 1, +d[4]) : new Date(Date.UTC(+d[2], d[3] - 1, +d[4], +d[5], +d[6])),
-      // tvf joins simulcasts: "TVF Voleybol TV-Tabii Spor"
-      kanal: kanal === "belli değil" ? [] : kanal.split("-").map(k => k.trim()),
-      takim: [ev_sahibi, misafir],
-    };
+    // tvf joins simulcasts: "TVF Voleybol TV-Tabii Spor"
+    return { lig, kanal: kanal === "belli değil" ? [] : kanal.split("-").map(k => k.trim()), takim: [ev_sahibi, misafir] };
   });
 }
 
@@ -87,24 +76,16 @@ function update() {
   for (const g in sel) sel[g].forEach(v => q.append(g, v));
   if (![...q].length) q.append("lig", ""); // nothing picked = everything (bare link means trt-only)
   url = FEED + "?" + q;
-  const shown = matches.filter(m => (!sel.lig.length || sel.lig.includes(m.lig))
+  const n = matches.filter(m => (!sel.lig.length || sel.lig.includes(m.lig))
     && (!sel.kanal.length || m.kanal.some(k => sel.kanal.includes(k)))
-    && (!sel.takim.length || m.takim.some(t => sel.takim.includes(t))));
-  document.getElementById("count").textContent = `· ${shown.length} maç`;
+    && (!sel.takim.length || m.takim.some(t => sel.takim.includes(t)))).length;
+  document.getElementById("count").textContent = `· ${n} maç`;
   const webcal = url.replace(/^https?:/, "webcal:");
   document.getElementById("gcal").href = "https://calendar.google.com/calendar/r?cid=" + encodeURIComponent(webcal);
   // apple calendar and desktop outlook both handle webcal://
   document.getElementById("webcal").href = document.getElementById("webcal2").href = webcal;
   document.getElementById("outlook").href = "https://outlook.live.com/owa/?rru=addsubscription&name=" +
     encodeURIComponent("Kadın Voleybol") + "&url=" + encodeURIComponent(webcal);
-  const now = Date.now() - 3 * 3600e3; // keep a match listed while it is being played
-  const day = { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Istanbul" };
-  const time = { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Istanbul" };
-  const upcoming = shown.filter(m => m.start >= now).sort((a, b) => a.start - b.start);
-  document.getElementById("list").innerHTML = upcoming.length ? upcoming.map(m =>
-    `<div class="match"><div>${m.start.toLocaleDateString("tr-TR", day)}<small>${m.allday ? "saat belli değil" : m.start.toLocaleTimeString("tr-TR", time)}</small></div>` +
-    `<div>${esc(m.takim.join(" - "))}<small>${esc(m.kanalText)}</small></div></div>`).join("")
-    : `<p class="muted">Bu seçimle şu an yaklaşan maç yok. Yeni maç eklenince takvimine kendiliğinden gelir.</p>`;
 }
 
 fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); }).then(ics => {
