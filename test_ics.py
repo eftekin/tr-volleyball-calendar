@@ -27,4 +27,9 @@ assert all(all_[k] == v for k, v in uids("takim=C").items())  # filtering never 
 assert ics.team("GALATASARAY DAIKIN") == "Galatasaray Daikin"
 assert ics.team("VAKIFBANK") == "Vakıfbank" and ics.team("İLBANK") == "İlbank"  # turkish dotless/dotted i
 assert ics.team("AL-KA ALTIN KANATLAR") == "Al-Ka Altın Kanatlar"
+page = ('<span id="x_gvmusabakaliste_gtarih_1">08.11.2026</span><span id="x_gvmusabakaliste_gsaat_1">Tehir</span>'
+        '<span id="x_gvmusabakaliste_gevsahibi_1">ZEREN SPOR</span><span id="x_gvmusabakaliste_gmisafir_1">İLBANK</span>')
+(p,) = ics.parse(page)
+assert p["postponed"] and p["allday"]  # postponed matches stay in the calendar instead of vanishing
+assert "SUMMARY:Ertelendi: Zeren Spor - İlbank" in ics.ics([("Sultanlar Ligi", p)], lambda *_: True)
 print("ok")

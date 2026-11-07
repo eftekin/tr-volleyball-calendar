@@ -30,10 +30,10 @@ def parse(page):
         if not re.fullmatch(r"\d\d\.\d\d\.\d{4}", c.get("gtarih", "")):
             continue  # week header rows
         hhmm = c.get("gsaat", "")
-        if hhmm and not re.fullmatch(r"\d\d:\d\d", hhmm):
-            continue  # "Tehir" = postponed, tvf adds the new date later
-        start = datetime.strptime(f"{c['gtarih']} {hhmm or '00:00'}", "%d.%m.%Y %H:%M").replace(tzinfo=TR)
-        yield {f: c.get(f, "") for f in FIELDS} | {"start": start, "allday": not hhmm}
+        # "Tehir" = postponed: keep it on its old date so it does not just vanish; tvf sets the new date later
+        timed = bool(re.fullmatch(r"\d\d:\d\d", hhmm))
+        start = datetime.strptime(f"{c['gtarih']} {hhmm if timed else '00:00'}", "%d.%m.%Y %H:%M").replace(tzinfo=TR)
+        yield {f: c.get(f, "") for f in FIELDS} | {"start": start, "allday": not timed, "postponed": bool(hhmm) and not timed}
 
 
 def channels(m):
@@ -70,7 +70,7 @@ def keeper(query):
 def ics(matches, keep):
     out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//voleybol-takvim//TR",
            "X-WR-CALNAME:Kadın Voleybol", "X-WR-TIMEZONE:Europe/Istanbul",
-           "REFRESH-INTERVAL;VALUE=DURATION:PT6H"]
+           "REFRESH-INTERVAL;VALUE=DURATION:PT6H", "X-PUBLISHED-TTL:PT6H"]  # apple / outlook
     seen = {}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for league, m in matches:
@@ -81,6 +81,8 @@ def ics(matches, keep):
             continue  # after the uid counter so filtering never shifts uids
         channel = m["gtvkanali"] or "belli değil"
         title = f"{team(m['gevsahibi'])} - {team(m['gmisafir'])}"  # uid stays on raw names
+        if m.get("postponed"):
+            title = "Ertelendi: " + title
         if m["allday"]:
             when = [f"DTSTART;VALUE=DATE:{m['start']:%Y%m%d}"]
         else:
@@ -117,7 +119,12 @@ def build(query=""):
     # every filter combo is its own cdn cache key, so share one tvf download per warm instance per hour
     global _cache
     if time.time() - _cache[0] > 3600:
-        _cache = (time.time(), current_matches())
+        try:
+            _cache = (time.time(), current_matches())
+        except Exception:
+            if not _cache[1]:
+                raise  # nothing to fall back on
+            # tvf is down: keep serving the last good list
     return ics(_cache[1], keeper(query))
 
 

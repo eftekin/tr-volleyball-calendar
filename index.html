@@ -64,7 +64,7 @@ function parse(ics) {
   return ics.split("BEGIN:VEVENT").slice(1).map(ev => {
     const get = k => un((ev.match(new RegExp("^" + k + ":(.*)$", "m")) || [, ""])[1].trim());
     const [lig, kanal] = get("DESCRIPTION").split("\nKanal: ");
-    const [ev_sahibi, misafir] = get("SUMMARY").split(" - ");
+    const [ev_sahibi, misafir] = get("SUMMARY").replace(/^Ertelendi: /, "").split(" - ");
     // tvf joins simulcasts: "TVF Voleybol TV-Tabii Spor"
     return { lig, kanal: kanal === "belli değil" ? [] : kanal.split("-").map(k => k.trim()), takim: [ev_sahibi, misafir] };
   });
