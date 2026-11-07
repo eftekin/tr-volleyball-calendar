@@ -48,7 +48,8 @@ function parse(ics) {
     const get = k => un((ev.match(new RegExp("^" + k + ":(.*)$", "m")) || [, ""])[1].trim());
     const [lig, kanal] = get("DESCRIPTION").split("\nKanal: ");
     const [ev_sahibi, misafir] = get("SUMMARY").split(" - ");
-    return { lig, kanal, takim: [ev_sahibi, misafir] };
+    // tvf joins simulcasts: "TVF Voleybol TV-Tabii Spor"
+    return { lig, kanal: kanal === "belli değil" ? [] : kanal.split("-").map(k => k.trim()), takim: [ev_sahibi, misafir] };
   });
 }
 
@@ -64,7 +65,7 @@ function update() {
   if (![...q].length) q.append("lig", ""); // nothing picked = everything (bare link means trt-only)
   const url = FEED + "?" + q;
   const n = matches.filter(m => (!sel.lig.length || sel.lig.includes(m.lig))
-    && (!sel.kanal.length || sel.kanal.includes(m.kanal))
+    && (!sel.kanal.length || m.kanal.some(k => sel.kanal.includes(k)))
     && (!sel.takim.length || m.takim.some(t => sel.takim.includes(t)))).length;
   document.getElementById("url").textContent = url;
   document.getElementById("count").textContent = `· şu an ${n} maç`;
@@ -74,7 +75,7 @@ function update() {
 
 fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); }).then(ics => {
   matches = parse(ics);
-  const opts = { lig: matches.map(m => m.lig), kanal: matches.map(m => m.kanal).filter(k => k !== "belli değil"),
+  const opts = { lig: matches.map(m => m.lig), kanal: matches.flatMap(m => m.kanal),
                  takim: matches.flatMap(m => m.takim) };
   const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   document.getElementById("form").innerHTML = Object.entries(groups).map(([g, title]) => {
