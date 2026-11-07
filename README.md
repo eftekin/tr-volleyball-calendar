@@ -1,18 +1,22 @@
 # voleybol-takvim
 
-TRT Spor ve TRT Spor Yıldız'da yayınlanan kadın voleybol maçlarını (Sultanlar Ligi, Kupa Voley) Google Takvim'e abone olunabilir takvim olarak verir. Maç saatleri ve kanallar [TVF fikstüründen](https://fikstur.tvf.org.tr) anlık çekilir.
+Kadın voleybol maçlarını (Sultanlar Ligi, Kupa Voley) Google Takvim'e abone olunabilir takvim olarak verir. Maç saatleri ve kanallar [TVF fikstüründen](https://fikstur.tvf.org.tr) anlık çekilir.
 
 ## Abone olma
 
-calendar.google.com → Diğer takvimler → **+** → URL'den:
+https://voleybol-takvim.vercel.app adresinde lig, kanal ve takım seç, çıkan linki takvimine ekle.
+
+Link elle de kurulabilir; her parametre tekrarlanabilir, boş bırakılan grup filtrelenmez:
 
 ```
-https://voleybol-takvim.vercel.app/kadin-voleybol.ics
+/kadin-voleybol.ics?lig=Sultanlar+Ligi&kanal=TRT+Spor&kanal=TRT+Spor+Yıldız&takim=VAKIFBANK
 ```
+
+Parametresiz link sadece TRT maçlarını verir (eski aboneler için).
 
 ## Geliştirme
 
 ```sh
-python3 api/ics.py    # takvimi ekrana basar
-npx vercel --prod     # yayınlar
+python3 api/ics.py 'lig='   # takvimi ekrana basar, argüman link parametreleri
+npx vercel --prod           # yayınlar
 ```

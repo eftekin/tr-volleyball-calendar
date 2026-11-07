@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voleybol Takvimi</title>
+<style>
+  :root { --bg: #fff; --fg: #1a1a1a; --muted: #666; --line: #ddd; --accent: #1a5fb4; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #121212; --fg: #eee; --muted: #999; --line: #333; --accent: #78aeed; } }
+  body { margin: 0 auto; max-width: 640px; padding: 24px 16px 48px; background: var(--bg); color: var(--fg);
+         font: 17px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 0 0 20px; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 16px; padding: 8px 12px 12px; }
+  legend { font-weight: 600; padding: 0 4px; }
+  legend small { color: var(--muted); font-weight: 400; }
+  label { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+  input[type=checkbox] { width: 20px; height: 20px; }
+  #teams { columns: 2; column-gap: 16px; }
+  @media (max-width: 480px) { #teams { columns: 1; } }
+  output { display: block; word-break: break-all; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+           font: 14px ui-monospace, monospace; margin: 8px 0; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  a.btn, button { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--accent); font: inherit; cursor: pointer;
+                  background: var(--accent); color: var(--bg); text-decoration: none; }
+  button { background: none; color: var(--accent); }
+</style>
+</head>
+<body>
+<h1>Kadın Voleybol Takvimi</h1>
+<p>İzlemek istediğin maçları seç, takvimine abone ol. Saat ve kanal değişiklikleri kendiliğinden gelir.</p>
+<div id="form">Fikstür yükleniyor…</div>
+<h2 style="font-size:1.1rem">Senin linkin <small id="count" style="color:var(--muted);font-weight:400"></small></h2>
+<output id="url"></output>
+<div class="row">
+  <a class="btn" id="gcal" target="_blank" rel="noopener">Google Takvim'e ekle</a>
+  <button id="copy" type="button">Linki kopyala</button>
+</div>
+<p style="margin-top:16px">Google Takvim'de elle eklemek için: Diğer takvimler → + → URL'den. Veriler <a href="https://fikstur.tvf.org.tr" style="color:var(--accent)">TVF fikstüründen</a>.</p>
+<script>
+const FEED = location.origin + "/kadin-voleybol.ics";
+const groups = { lig: "Lig", kanal: "Kanal", takim: "Takım" };
+let matches = [];
+
+function parse(ics) {
+  const un = s => s.replace(/\\n/g, "\n").replace(/\\([,;\\])/g, "$1");
+  return ics.split("BEGIN:VEVENT").slice(1).map(ev => {
+    const get = k => un((ev.match(new RegExp("^" + k + ":(.*)$", "m")) || [, ""])[1].trim());
+    const [lig, kanal] = get("DESCRIPTION").split("\nKanal: ");
+    const [ev_sahibi, misafir] = get("SUMMARY").split(" - ");
+    return { lig, kanal, takim: [ev_sahibi, misafir] };
+  });
+}
+
+function selected() {
+  const sel = {};
+  for (const g in groups) sel[g] = [...document.querySelectorAll(`input[name=${g}]:checked`)].map(i => i.value);
+  return sel;
+}
+
+function update() {
+  const sel = selected(), q = new URLSearchParams();
+  for (const g in sel) sel[g].forEach(v => q.append(g, v));
+  if (![...q].length) q.append("lig", ""); // nothing picked = everything (bare link means trt-only)
+  const url = FEED + "?" + q;
+  const n = matches.filter(m => (!sel.lig.length || sel.lig.includes(m.lig))
+    && (!sel.kanal.length || sel.kanal.includes(m.kanal))
+    && (!sel.takim.length || m.takim.some(t => sel.takim.includes(t)))).length;
+  document.getElementById("url").textContent = url;
+  document.getElementById("count").textContent = `· şu an ${n} maç`;
+  document.getElementById("gcal").href = "https://calendar.google.com/calendar/r?cid=" +
+    encodeURIComponent(url.replace(/^https?:/, "webcal:"));
+}
+
+fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); }).then(ics => {
+  matches = parse(ics);
+  const opts = { lig: matches.map(m => m.lig), kanal: matches.map(m => m.kanal).filter(k => k !== "belli değil"),
+                 takim: matches.flatMap(m => m.takim) };
+  const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  document.getElementById("form").innerHTML = Object.entries(groups).map(([g, title]) => {
+    const vals = [...new Set(opts[g])].sort((a, b) => a.localeCompare(b, "tr"));
+    return `<fieldset><legend>${title} <small>(boş bırakırsan hepsi)</small></legend><div id="${g === "takim" ? "teams" : ""}">` +
+      vals.map(v => `<label><input type="checkbox" name="${g}" value="${esc(v)}">${esc(v)}</label>`).join("") +
+      `</div></fieldset>`;
+  }).join("");
+  document.getElementById("form").addEventListener("change", update);
+  update();
+}).catch(() => { document.getElementById("form").textContent = "Fikstür şu an alınamadı, biraz sonra tekrar dene."; });
+
+document.getElementById("copy").onclick = e => navigator.clipboard.writeText(document.getElementById("url").textContent)
+  .then(() => { e.target.textContent = "Kopyalandı"; });
+</script>
+</body>
+</html>
