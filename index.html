@@ -104,7 +104,7 @@ function update() {
   document.getElementById("list").innerHTML = upcoming.length ? upcoming.map(m =>
     `<div class="match"><div>${m.start.toLocaleDateString("tr-TR", day)}<small>${m.allday ? "saat belli değil" : m.start.toLocaleTimeString("tr-TR", time)}</small></div>` +
     `<div>${esc(m.takim.join(" - "))}<small>${esc(m.kanalText)}</small></div></div>`).join("")
-    : `<p class="muted">Bu seçimle önümüzdeki maç yok.</p>`;
+    : `<p class="muted">Bu seçimle şu an yaklaşan maç yok. Yeni maç eklenince takvimine kendiliğinden gelir.</p>`;
 }
 
 fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); }).then(ics => {
