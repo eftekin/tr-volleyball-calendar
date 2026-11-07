@@ -83,7 +83,8 @@ function update() {
   const n = matches.filter(m => (!sel.lig.length || sel.lig.includes(m.lig))
     && (!sel.kanal.length || m.kanal.some(k => sel.kanal.includes(k)))
     && (!sel.takim.length || m.takim.some(t => sel.takim.includes(t)))).length;
-  document.getElementById("count").textContent = `· ${n} maç`;
+  document.getElementById("count").textContent = matches.length ? `· ${n} maç` : "";
+  document.getElementById("copy").textContent = "Linki kopyala"; // the link changed, so the old "Kopyalandı" is stale
   const webcal = url.replace(/^https?:/, "webcal:");
   document.getElementById("gcal").href = "https://calendar.google.com/calendar/r?cid=" + encodeURIComponent(webcal);
   // apple calendar and desktop outlook both handle webcal://
@@ -92,6 +93,7 @@ function update() {
     encodeURIComponent("Kadın Voleybol") + "&url=" + encodeURIComponent(webcal);
 }
 
+update(); // buttons work with the all-matches link even if the fixture below fails to load
 fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); }).then(ics => {
   matches = parse(ics);
   const opts = { lig: matches.map(m => m.lig), kanal: matches.flatMap(m => m.kanal), takim: matches.flatMap(m => m.takim) };
