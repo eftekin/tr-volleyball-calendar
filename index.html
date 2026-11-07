@@ -33,7 +33,9 @@
 <h2 style="font-size:1.1rem">Senin linkin <small id="count" style="color:var(--muted);font-weight:400"></small></h2>
 <output id="url"></output>
 <div class="row">
-  <a class="btn" id="gcal" target="_blank" rel="noopener">Google Takvim'e ekle</a>
+  <a class="btn" id="gcal" target="_blank" rel="noopener">Google Takvim</a>
+  <a class="btn" id="webcal">Apple Takvim / Outlook</a>
+  <a class="btn" id="outlook" target="_blank" rel="noopener">Outlook.com</a>
   <button id="copy" type="button">Linki kopyala</button>
 </div>
 <p style="margin-top:16px">Google Takvim'de elle eklemek için: Diğer takvimler → + → URL'den. Veriler <a href="https://fikstur.tvf.org.tr" style="color:var(--accent)">TVF fikstüründen</a>. Hata bildirmek ya da katkıda bulunmak için: <a href="https://github.com/eftekin/tr-volleyball-calendar" style="color:var(--accent)">GitHub</a>.</p>
@@ -69,8 +71,11 @@ function update() {
     && (!sel.takim.length || m.takim.some(t => sel.takim.includes(t)))).length;
   document.getElementById("url").textContent = url;
   document.getElementById("count").textContent = `· şu an ${n} maç`;
-  document.getElementById("gcal").href = "https://calendar.google.com/calendar/r?cid=" +
-    encodeURIComponent(url.replace(/^https?:/, "webcal:"));
+  const webcal = url.replace(/^https?:/, "webcal:");
+  document.getElementById("gcal").href = "https://calendar.google.com/calendar/r?cid=" + encodeURIComponent(webcal);
+  document.getElementById("webcal").href = webcal; // apple calendar and desktop outlook both handle webcal://
+  document.getElementById("outlook").href = "https://outlook.live.com/owa/?rru=addsubscription&name=" +
+    encodeURIComponent("Kadın Voleybol") + "&url=" + encodeURIComponent(webcal);
 }
 
 fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); }).then(ics => {
