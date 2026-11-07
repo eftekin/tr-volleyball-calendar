@@ -4,16 +4,16 @@ import hashlib
 import html
 import re
 import sys
+import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler
+from urllib.parse import parse_qs, urlparse
 from datetime import datetime, timedelta, timezone
 
 BASE = "https://fikstur.tvf.org.tr"
-LEAGUES = {
-    "Sultanlar Ligi": "/FSW/MjAyNi0yMDI3/Sw%3d%3d/U1VMVEFOTEFS/Vm9kYWZvbmUgU3VsdGFubGFyIExpZ2k%3d",
-    "Kupa Voley": "/FSW/MjAyNi0yMDI3/Sw%3d%3d/QVNLVks%3d/QVhBIFNpZ29ydGEgS3VwYSBWb2xleSBLYWTEsW5sYXI%3d",
-}
-FIELDS = ["gtarih", "gsaat", "gtvkanali", "gyer", "gevsahibi", "gmisafir", "gseta", "gsetb"]
+# league code (base64 in tvf links) -> name; the season part of the link changes every year
+LEAGUES = {"U1VMVEFOTEFS": "Sultanlar Ligi", "QVNLVks%3d": "Kupa Voley"}
+FIELDS = ["gtarih", "gsaat", "gtvkanali", "gevsahibi", "gmisafir"]
 TR = timezone(timedelta(hours=3))  # turkey has no dst
 
 
@@ -29,18 +29,45 @@ def parse(page):
         c = cells[row]
         if not re.fullmatch(r"\d\d\.\d\d\.\d{4}", c.get("gtarih", "")):
             continue  # week header rows
-        time = c.get("gsaat", "")
-        if time and not re.fullmatch(r"\d\d:\d\d", time):
+        hhmm = c.get("gsaat", "")
+        if hhmm and not re.fullmatch(r"\d\d:\d\d", hhmm):
             continue  # "Tehir" = postponed, tvf adds the new date later
-        start = datetime.strptime(f"{c['gtarih']} {time or '00:00'}", "%d.%m.%Y %H:%M").replace(tzinfo=TR)
-        yield {f: c.get(f, "") for f in FIELDS} | {"start": start, "allday": not time}
+        start = datetime.strptime(f"{c['gtarih']} {hhmm or '00:00'}", "%d.%m.%Y %H:%M").replace(tzinfo=TR)
+        yield {f: c.get(f, "") for f in FIELDS} | {"start": start, "allday": not hhmm}
+
+
+def channels(m):
+    # tvf joins simulcasts: "TVF Voleybol TV-Tabii Spor"
+    return {c.strip() for c in m["gtvkanali"].split("-") if c.strip()}
+
+
+# shortcut: foreign sponsor words that turkish casing would turn into "Daıkın", add new ones as teams change
+FOREIGN = {"DAIKIN": "Daikin", "MEDICANA": "Medicana"}
+
+
+def team(s):
+    # tvf writes names in caps; turkish title case needs I->ı and İ->i before lower()
+    def word(w):
+        return FOREIGN.get(w) or w[0] + w[1:].replace("I", "ı").replace("İ", "i").lower()
+    return " ".join("-".join(word(p) for p in w.split("-") if p) for w in s.split())
 
 
 def esc(s):
     return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
-def ics(matches):
+def keeper(query):
+    q = parse_qs(query, keep_blank_values=True)
+    if not {"lig", "kanal", "takim"} & q.keys():
+        # shortcut: bare link stays trt-only so existing subscribers keep their calendar, drop once they migrate
+        return lambda league, m: m["gtvkanali"].startswith("TRT")
+    want = {k: {v for v in q.get(k, []) if v} for k in ("lig", "kanal", "takim")}  # empty group = no filter
+    return lambda league, m: ((not want["lig"] or league in want["lig"])
+                              and (not want["kanal"] or bool(channels(m) & want["kanal"]))
+                              and (not want["takim"] or bool({team(m["gevsahibi"]), team(m["gmisafir"])} & want["takim"])))
+
+
+def ics(matches, keep):
     out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//voleybol-takvim//TR",
            "X-WR-CALNAME:Kadın Voleybol", "X-WR-TIMEZONE:Europe/Istanbul",
            "REFRESH-INTERVAL;VALUE=DURATION:PT6H"]
@@ -50,10 +77,10 @@ def ics(matches):
         key = f"{league}|{m['gevsahibi']}|{m['gmisafir']}"
         seen[key] = seen.get(key, 0) + 1  # same pairing can repeat in playoffs
         uid = hashlib.sha1(f"{key}|{seen[key]}".encode()).hexdigest()
-        channel = m["gtvkanali"]
-        if not channel.startswith("TRT"):
-            continue  # only what dedem can watch on tv; unannounced ones appear once tvf sets a trt channel
-        title = f"{m['gevsahibi']} - {m['gmisafir']}"
+        if not keep(league, m):
+            continue  # after the uid counter so filtering never shifts uids
+        channel = m["gtvkanali"] or "belli değil"
+        title = f"{team(m['gevsahibi'])} - {team(m['gmisafir'])}"  # uid stays on raw names
         if m["allday"]:
             when = [f"DTSTART;VALUE=DATE:{m['start']:%Y%m%d}"]
         else:
@@ -73,17 +100,31 @@ def fetch(path):
     return urllib.request.urlopen(req, timeout=60).read().decode("cp1254")
 
 
-def build():
-    matches = [(name, m) for name, path in LEAGUES.items() for m in parse(fetch(path))]
+def current_matches():
+    home = fetch("/Fikst%C3%BCr")
+    links = {link.split("/")[3]: link for link in re.findall(r'FSW/[^"\']+', home)}
+    assert LEAGUES.keys() <= links.keys(), "tvf fixture links not found"
+    matches = [(name, m) for code, name in LEAGUES.items() for m in parse(fetch("/" + links[code]))]
     # guard: a broken parse must not serve an empty calendar that wipes the subscriber's events
     assert len(matches) > 50, f"only {len(matches)} matches parsed"
-    return ics(matches)
+    return matches
+
+
+_cache = (0.0, [])
+
+
+def build(query=""):
+    # every filter combo is its own cdn cache key, so share one tvf download per warm instance per hour
+    global _cache
+    if time.time() - _cache[0] > 3600:
+        _cache = (time.time(), current_matches())
+    return ics(_cache[1], keeper(query))
 
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            body, status, ctype = build().encode(), 200, "text/calendar; charset=utf-8"
+            body, status, ctype = build(urlparse(self.path).query).encode(), 200, "text/calendar; charset=utf-8"
         except Exception as e:
             # 5xx makes google keep the last good copy
             body, status, ctype = f"tvf fetch failed: {e}".encode(), 502, "text/plain"
@@ -96,4 +137,4 @@ class handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    sys.stdout.write(build())
+    sys.stdout.write(build(sys.argv[1] if len(sys.argv) > 1 else ""))
