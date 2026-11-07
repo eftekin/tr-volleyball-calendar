@@ -1,6 +1,6 @@
 # voleybol-takvim
 
-> Maçları seçip takvimine eklemek için: **https://voleybol-takvim.vercel.app**
+> Pick matches and get your calendar link: **https://voleybol-takvim.vercel.app**
 
 Subscribable calendar of Turkish women's volleyball matches (Sultanlar Ligi, Kupa Voley) with kick-off times and TV channels, pulled live from the [TVF fixture site](https://fikstur.tvf.org.tr). The site and calendar text are in Turkish since that is who watches these matches.
 
