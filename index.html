@@ -109,7 +109,9 @@ function update() {
 
 fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); }).then(ics => {
   matches = parse(ics);
-  const opts = { lig: matches.map(m => m.lig), kanal: matches.flatMap(m => m.kanal), takim: matches.flatMap(m => m.takim) };
+  // only offer what still has matches ahead, so no choice leads to an empty list
+  const ahead = matches.filter(m => m.start >= Date.now() - 3 * 3600e3);
+  const opts = { lig: ahead.map(m => m.lig), kanal: ahead.flatMap(m => m.kanal), takim: ahead.flatMap(m => m.takim) };
   document.getElementById("form").innerHTML = Object.entries(groups).map(([g, title]) => {
     const vals = [...new Set(opts[g])].sort((a, b) => a.localeCompare(b, "tr"));
     return `<fieldset><legend>${title} <span class="muted">(boşsa hepsi)</span></legend><div class="${g === "takim" ? "grid" : "opts"}">` +
