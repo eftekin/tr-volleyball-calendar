@@ -129,7 +129,10 @@ def build(query=""):
 
 
 class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
+    def do_HEAD(self):
+        self.do_GET(head=True)  # some calendar services and monitors probe with HEAD first
+
+    def do_GET(self, head=False):
         try:
             body, status, ctype = build(urlparse(self.path).query).encode(), 200, "text/calendar; charset=utf-8"
         except Exception as e:
@@ -139,8 +142,10 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         # vercel edge cache: hit tvf at most hourly
         self.send_header("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if not head:
+            self.wfile.write(body)
 
 
 if __name__ == "__main__":
