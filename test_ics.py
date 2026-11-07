@@ -24,4 +24,7 @@ assert list(uids("")) == list(uids("v=2")) == ["A - B", "A - C"]  # bare link st
 assert list(uids("kanal=TVF+Voleybol+TV")) == ["C - D"]  # simulcast text is split into channels
 assert list(uids("takim=A&lig=Kupa+Voley")) == ["A - C"]  # groups combine with and
 assert all(all_[k] == v for k, v in uids("takim=C").items())  # filtering never changes uids
+assert ics.team("GALATASARAY DAIKIN") == "Galatasaray Daikin"
+assert ics.team("VAKIFBANK") == "Vakıfbank" and ics.team("İLBANK") == "İlbank"  # turkish dotless/dotted i
+assert ics.team("AL-KA ALTIN KANATLAR") == "Al-Ka Altın Kanatlar"
 print("ok")

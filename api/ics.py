@@ -41,6 +41,17 @@ def channels(m):
     return {c.strip() for c in m["gtvkanali"].split("-") if c.strip()}
 
 
+# shortcut: foreign sponsor words that turkish casing would turn into "Daıkın", add new ones as teams change
+FOREIGN = {"DAIKIN": "Daikin", "MEDICANA": "Medicana"}
+
+
+def team(s):
+    # tvf writes names in caps; turkish title case needs I->ı and İ->i before lower()
+    def word(w):
+        return FOREIGN.get(w) or w[0] + w[1:].replace("I", "ı").replace("İ", "i").lower()
+    return " ".join("-".join(word(p) for p in w.split("-") if p) for w in s.split())
+
+
 def esc(s):
     return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
@@ -53,7 +64,7 @@ def keeper(query):
     want = {k: {v for v in q.get(k, []) if v} for k in ("lig", "kanal", "takim")}  # empty group = no filter
     return lambda league, m: ((not want["lig"] or league in want["lig"])
                               and (not want["kanal"] or bool(channels(m) & want["kanal"]))
-                              and (not want["takim"] or bool({m["gevsahibi"], m["gmisafir"]} & want["takim"])))
+                              and (not want["takim"] or bool({team(m["gevsahibi"]), team(m["gmisafir"])} & want["takim"])))
 
 
 def ics(matches, keep):
@@ -69,7 +80,7 @@ def ics(matches, keep):
         if not keep(league, m):
             continue  # after the uid counter so filtering never shifts uids
         channel = m["gtvkanali"] or "belli değil"
-        title = f"{m['gevsahibi']} - {m['gmisafir']}"
+        title = f"{team(m['gevsahibi'])} - {team(m['gmisafir'])}"  # uid stays on raw names
         if m["allday"]:
             when = [f"DTSTART;VALUE=DATE:{m['start']:%Y%m%d}"]
         else:
