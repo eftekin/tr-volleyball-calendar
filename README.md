@@ -1,4 +1,4 @@
-# voleybol-takvim
+# tr-volleyball-calendar
 
 > Pick matches and get your calendar link: **https://voleybol-takvim.vercel.app**
 
@@ -7,7 +7,7 @@ Subscribable calendar of Turkish women's volleyball matches (Sultanlar Ligi, Kup
 ## Calendar link
 
 ```
-https://voleybol-takvim.vercel.app/kadin-voleybol.ics?lig=Sultanlar+Ligi&kanal=TRT+Spor&takim=VAKIFBANK
+https://voleybol-takvim.vercel.app/kadin-voleybol.ics?lig=Sultanlar+Ligi&kanal=TRT+Spor&takim=Vak%C4%B1fbank
 ```
 
 `lig` (league), `kanal` (channel) and `takim` (team) can each repeat; a group left out is not filtered, and `?lig=` alone gives every match. A link with no filters gives TRT matches only, kept for early subscribers.
