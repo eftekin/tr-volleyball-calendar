@@ -1,0 +1,25 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * 9-12,1-5 1" # mondays in season; the summer fixture is empty
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python test_ics.py
+  live:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: live feed still parses tvf
+        run: |
+          n=$(curl -sf --max-time 120 'https://voleybol-takvim.vercel.app/kadin-voleybol.ics?lig=' | grep -c BEGIN:VEVENT || true)
+          echo "$n matches"
+          test "$n" -gt 50
