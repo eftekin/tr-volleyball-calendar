@@ -52,7 +52,7 @@ def ics(matches):
         uid = hashlib.sha1(f"{key}|{seen[key]}".encode()).hexdigest()
         channel = m["gtvkanali"]
         if not channel.startswith("TRT"):
-            continue  # only what dedem can watch on tv; unannounced ones appear once tvf sets a trt channel
+            continue  # only free-to-air trt matches; unannounced ones appear once tvf sets a channel
         title = f"{m['gevsahibi']} - {m['gmisafir']}"
         if m["allday"]:
             when = [f"DTSTART;VALUE=DATE:{m['start']:%Y%m%d}"]
