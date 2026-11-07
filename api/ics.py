@@ -6,6 +6,7 @@ import re
 import sys
 import urllib.request
 from http.server import BaseHTTPRequestHandler
+from urllib.parse import parse_qs, urlparse
 from datetime import datetime, timedelta, timezone
 
 BASE = "https://fikstur.tvf.org.tr"
@@ -40,7 +41,18 @@ def esc(s):
     return s.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
 
 
-def ics(matches):
+def keeper(query):
+    q = parse_qs(query, keep_blank_values=True)
+    if not {"lig", "kanal", "takim"} & q.keys():
+        # shortcut: bare link stays trt-only so existing subscribers keep their calendar, drop once they migrate
+        return lambda league, m: m["gtvkanali"].startswith("TRT")
+    want = {k: {v for v in q.get(k, []) if v} for k in ("lig", "kanal", "takim")}  # empty group = no filter
+    return lambda league, m: ((not want["lig"] or league in want["lig"])
+                              and (not want["kanal"] or m["gtvkanali"] in want["kanal"])
+                              and (not want["takim"] or bool({m["gevsahibi"], m["gmisafir"]} & want["takim"])))
+
+
+def ics(matches, keep):
     out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//voleybol-takvim//TR",
            "X-WR-CALNAME:Kadın Voleybol", "X-WR-TIMEZONE:Europe/Istanbul",
            "REFRESH-INTERVAL;VALUE=DURATION:PT6H"]
@@ -50,9 +62,9 @@ def ics(matches):
         key = f"{league}|{m['gevsahibi']}|{m['gmisafir']}"
         seen[key] = seen.get(key, 0) + 1  # same pairing can repeat in playoffs
         uid = hashlib.sha1(f"{key}|{seen[key]}".encode()).hexdigest()
-        channel = m["gtvkanali"]
-        if not channel.startswith("TRT"):
-            continue  # only free-to-air trt matches; unannounced ones appear once tvf sets a channel
+        if not keep(league, m):
+            continue  # after the uid counter so filtering never shifts uids
+        channel = m["gtvkanali"] or "belli değil"
         title = f"{m['gevsahibi']} - {m['gmisafir']}"
         if m["allday"]:
             when = [f"DTSTART;VALUE=DATE:{m['start']:%Y%m%d}"]
@@ -73,17 +85,17 @@ def fetch(path):
     return urllib.request.urlopen(req, timeout=60).read().decode("cp1254")
 
 
-def build():
+def build(query=""):
     matches = [(name, m) for name, path in LEAGUES.items() for m in parse(fetch(path))]
     # guard: a broken parse must not serve an empty calendar that wipes the subscriber's events
     assert len(matches) > 50, f"only {len(matches)} matches parsed"
-    return ics(matches)
+    return ics(matches, keeper(query))
 
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            body, status, ctype = build().encode(), 200, "text/calendar; charset=utf-8"
+            body, status, ctype = build(urlparse(self.path).query).encode(), 200, "text/calendar; charset=utf-8"
         except Exception as e:
             # 5xx makes google keep the last good copy
             body, status, ctype = f"tvf fetch failed: {e}".encode(), 502, "text/plain"
@@ -96,4 +108,4 @@ class handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    sys.stdout.write(build())
+    sys.stdout.write(build(sys.argv[1] if len(sys.argv) > 1 else ""))
