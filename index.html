@@ -72,7 +72,11 @@ function parse(ics) {
 
 function update() {
   const sel = {}, q = new URLSearchParams();
-  for (const g in groups) sel[g] = [...document.querySelectorAll(`input[name=${g}]:checked`)].map(i => i.value);
+  for (const g in groups) {
+    sel[g] = [...document.querySelectorAll(`input[name=${g}]:checked`)].map(i => i.value);
+    // all ticked = no filter, so matches with an unannounced or new channel/team still arrive
+    if (sel[g].length === document.querySelectorAll(`input[name=${g}]`).length) sel[g] = [];
+  }
   for (const g in sel) sel[g].forEach(v => q.append(g, v));
   if (![...q].length) q.append("lig", ""); // nothing picked = everything (bare link means trt-only)
   url = FEED + "?" + q;
