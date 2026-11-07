@@ -4,17 +4,16 @@ import hashlib
 import html
 import re
 import sys
+import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 from datetime import datetime, timedelta, timezone
 
 BASE = "https://fikstur.tvf.org.tr"
-LEAGUES = {
-    "Sultanlar Ligi": "/FSW/MjAyNi0yMDI3/Sw%3d%3d/U1VMVEFOTEFS/Vm9kYWZvbmUgU3VsdGFubGFyIExpZ2k%3d",
-    "Kupa Voley": "/FSW/MjAyNi0yMDI3/Sw%3d%3d/QVNLVks%3d/QVhBIFNpZ29ydGEgS3VwYSBWb2xleSBLYWTEsW5sYXI%3d",
-}
-FIELDS = ["gtarih", "gsaat", "gtvkanali", "gyer", "gevsahibi", "gmisafir", "gseta", "gsetb"]
+# league code (base64 in tvf links) -> name; the season part of the link changes every year
+LEAGUES = {"U1VMVEFOTEFS": "Sultanlar Ligi", "QVNLVks%3d": "Kupa Voley"}
+FIELDS = ["gtarih", "gsaat", "gtvkanali", "gevsahibi", "gmisafir"]
 TR = timezone(timedelta(hours=3))  # turkey has no dst
 
 
@@ -30,11 +29,16 @@ def parse(page):
         c = cells[row]
         if not re.fullmatch(r"\d\d\.\d\d\.\d{4}", c.get("gtarih", "")):
             continue  # week header rows
-        time = c.get("gsaat", "")
-        if time and not re.fullmatch(r"\d\d:\d\d", time):
+        hhmm = c.get("gsaat", "")
+        if hhmm and not re.fullmatch(r"\d\d:\d\d", hhmm):
             continue  # "Tehir" = postponed, tvf adds the new date later
-        start = datetime.strptime(f"{c['gtarih']} {time or '00:00'}", "%d.%m.%Y %H:%M").replace(tzinfo=TR)
-        yield {f: c.get(f, "") for f in FIELDS} | {"start": start, "allday": not time}
+        start = datetime.strptime(f"{c['gtarih']} {hhmm or '00:00'}", "%d.%m.%Y %H:%M").replace(tzinfo=TR)
+        yield {f: c.get(f, "") for f in FIELDS} | {"start": start, "allday": not hhmm}
+
+
+def channels(m):
+    # tvf joins simulcasts: "TVF Voleybol TV-Tabii Spor"
+    return {c.strip() for c in m["gtvkanali"].split("-") if c.strip()}
 
 
 def esc(s):
@@ -48,7 +52,7 @@ def keeper(query):
         return lambda league, m: m["gtvkanali"].startswith("TRT")
     want = {k: {v for v in q.get(k, []) if v} for k in ("lig", "kanal", "takim")}  # empty group = no filter
     return lambda league, m: ((not want["lig"] or league in want["lig"])
-                              and (not want["kanal"] or m["gtvkanali"] in want["kanal"])
+                              and (not want["kanal"] or bool(channels(m) & want["kanal"]))
                               and (not want["takim"] or bool({m["gevsahibi"], m["gmisafir"]} & want["takim"])))
 
 
@@ -85,11 +89,25 @@ def fetch(path):
     return urllib.request.urlopen(req, timeout=60).read().decode("cp1254")
 
 
-def build(query=""):
-    matches = [(name, m) for name, path in LEAGUES.items() for m in parse(fetch(path))]
+def current_matches():
+    home = fetch("/Fikst%C3%BCr")
+    links = {link.split("/")[3]: link for link in re.findall(r'FSW/[^"\']+', home)}
+    assert LEAGUES.keys() <= links.keys(), "tvf fixture links not found"
+    matches = [(name, m) for code, name in LEAGUES.items() for m in parse(fetch("/" + links[code]))]
     # guard: a broken parse must not serve an empty calendar that wipes the subscriber's events
     assert len(matches) > 50, f"only {len(matches)} matches parsed"
-    return ics(matches, keeper(query))
+    return matches
+
+
+_cache = (0.0, [])
+
+
+def build(query=""):
+    # every filter combo is its own cdn cache key, so share one tvf download per warm instance per hour
+    global _cache
+    if time.time() - _cache[0] > 3600:
+        _cache = (time.time(), current_matches())
+    return ics(_cache[1], keeper(query))
 
 
 class handler(BaseHTTPRequestHandler):
