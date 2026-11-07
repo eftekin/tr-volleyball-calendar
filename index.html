@@ -114,7 +114,6 @@ fetch(FEED + "?lig=").then(r => { if (!r.ok) throw r.status; return r.text(); })
   const opts = { lig: ahead.map(m => m.lig), kanal: ahead.flatMap(m => m.kanal), takim: ahead.flatMap(m => m.takim) };
   document.getElementById("form").innerHTML = Object.entries(groups).map(([g, title]) => {
     const vals = [...new Set(opts[g])].sort((a, b) => a.localeCompare(b, "tr"));
-    if (vals.length < 2) return ""; // a single option is no choice
     return `<fieldset><legend>${title} <span class="muted">(boşsa hepsi)</span></legend><div class="${g === "takim" ? "grid" : "opts"}">` +
       vals.map(v => `<label><input type="checkbox" name="${g}" value="${esc(v)}">${esc(v)}</label>`).join("") +
       `</div></fieldset>`;
